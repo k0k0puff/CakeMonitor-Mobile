@@ -8,7 +8,7 @@ import org.json.JSONObject
 class HttpServer(
     private val context: Context,
     private val port: Int,
-    private val onSnapRequest: () -> Unit
+    private val onSnapRequest: (String) -> Unit
 ) : NanoHTTPD(port) {
 
     companion object {
@@ -28,7 +28,7 @@ class HttpServer(
         Log.d(TAG, "Received $method request to $uri")
 
         return when {
-            uri == "/snap" && method == Method.POST -> handleSnap()
+            uri == "/snap" && method == Method.POST -> handleSnap(session)
             uri == "/health" && method == Method.GET -> handleHealth()
             else -> newFixedLengthResponse(
                 Response.Status.NOT_FOUND,
@@ -40,7 +40,27 @@ class HttpServer(
         }
     }
 
-    private fun handleSnap(): Response {
+    private fun handleSnap(session: IHTTPSession): Response {
+        // Parse request body
+        val files = HashMap<String, String>()
+        try {
+            session.parseBody(files)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse request body", e)
+        }
+
+        val telegramId = extractTelegramId(session, files)
+        if (telegramId.isBlank()) {
+            Log.w(TAG, "/snap request missing telegram_id")
+            return newFixedLengthResponse(
+                Response.Status.BAD_REQUEST,
+                "application/json",
+                JSONObject().apply {
+                    put("error", "Missing required parameter: telegram_id")
+                }.toString()
+            )
+        }
+
         return if (isCaptureInProgress) {
             Log.i(TAG, "/snap request received, but capture already in progress")
             newFixedLengthResponse(
@@ -51,11 +71,11 @@ class HttpServer(
                 }.toString()
             )
         } else {
-            Log.i(TAG, "/snap request received, triggering photo capture")
+            Log.i(TAG, "/snap request received (telegram_id=$telegramId), triggering photo capture")
 
             // Trigger photo capture asynchronously
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                onSnapRequest()
+                onSnapRequest(telegramId)
             }
 
             // Return immediate acknowledgment
@@ -67,6 +87,23 @@ class HttpServer(
                 }.toString()
             )
         }
+    }
+
+    private fun extractTelegramId(session: IHTTPSession, files: HashMap<String, String>): String {
+        // Try JSON body first
+        val postData = files["postData"]
+        if (!postData.isNullOrBlank()) {
+            try {
+                val json = JSONObject(postData)
+                val id = json.optString("telegram_id", "")
+                if (id.isNotBlank()) return id
+            } catch (e: Exception) {
+                // Not JSON, fall through to form params
+            }
+        }
+
+        // Try URL-encoded form params
+        return session.parameters["telegram_id"]?.firstOrNull() ?: ""
     }
 
     private fun handleHealth(): Response {

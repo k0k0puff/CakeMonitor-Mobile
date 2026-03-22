@@ -54,3 +54,9 @@ google-services.json
 
 # Signing key
 key.properties
+
+# Next Action File
+Next Action.txt
+
+# Document Folder
+/Document/

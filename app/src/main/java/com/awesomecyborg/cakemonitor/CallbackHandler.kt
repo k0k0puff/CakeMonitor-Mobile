@@ -24,7 +24,7 @@ class CallbackHandler(private val context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    fun sendCallback(photoFile: File?, errorMessage: String?, onComplete: (Boolean, String) -> Unit) {
+    fun sendCallback(photoFile: File?, errorMessage: String?, telegramId: String, onComplete: (Boolean, String) -> Unit) {
         val callbackUrl = Config.getCallbackUrl(context)
         if (callbackUrl.isBlank()) {
             Log.e(TAG, "Callback URL not configured")
@@ -32,12 +32,13 @@ class CallbackHandler(private val context: Context) {
             return
         }
 
-        sendWithRetry(photoFile, errorMessage, callbackUrl, 0, onComplete)
+        sendWithRetry(photoFile, errorMessage, telegramId, callbackUrl, 0, onComplete)
     }
 
     private fun sendWithRetry(
         photoFile: File?,
         errorMessage: String?,
+        telegramId: String,
         callbackUrl: String,
         attemptNumber: Int,
         onComplete: (Boolean, String) -> Unit
@@ -65,6 +66,7 @@ class CallbackHandler(private val context: Context) {
                 .addFormDataPart("location", location)
                 .addFormDataPart("timestamp", timestamp)
                 .addFormDataPart("device_id", deviceId)
+                .addFormDataPart("telegram_id", telegramId)
                 .addFormDataPart("status", "ok")
                 .build()
         } else {
@@ -74,6 +76,7 @@ class CallbackHandler(private val context: Context) {
                 .addFormDataPart("location", location)
                 .addFormDataPart("timestamp", timestamp)
                 .addFormDataPart("device_id", deviceId)
+                .addFormDataPart("telegram_id", telegramId)
                 .addFormDataPart("status", "error")
 
             errorMessage?.let {
@@ -98,7 +101,7 @@ class CallbackHandler(private val context: Context) {
                 if (attemptNumber < MAX_RETRIES - 1) {
                     Log.i(TAG, "Retrying in ${RETRY_DELAY_MS}ms...")
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        sendWithRetry(photoFile, errorMessage, callbackUrl, attemptNumber + 1, onComplete)
+                        sendWithRetry(photoFile, errorMessage, telegramId, callbackUrl, attemptNumber + 1, onComplete)
                     }, RETRY_DELAY_MS)
                 } else {
                     onComplete(false, "Network error: ${e.message}")
@@ -119,7 +122,7 @@ class CallbackHandler(private val context: Context) {
                         if (attemptNumber < MAX_RETRIES - 1) {
                             Log.i(TAG, "Retrying in ${RETRY_DELAY_MS}ms...")
                             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                sendWithRetry(photoFile, errorMessage, callbackUrl, attemptNumber + 1, onComplete)
+                                sendWithRetry(photoFile, errorMessage, telegramId, callbackUrl, attemptNumber + 1, onComplete)
                             }, RETRY_DELAY_MS)
                         } else {
                             onComplete(false, "HTTP ${response.code}")

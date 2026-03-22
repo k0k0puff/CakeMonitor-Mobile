@@ -68,8 +68,8 @@ class CameraMonitorService : Service() {
 
         // Start HTTP server
         val port = Config.getPort(this)
-        httpServer = HttpServer(this, port) {
-            handleSnapRequest()
+        httpServer = HttpServer(this, port) { telegramId ->
+            handleSnapRequest(telegramId)
         }
 
         if (httpServer?.startServer() == true) {
@@ -95,7 +95,7 @@ class CameraMonitorService : Service() {
         stopSelf()
     }
 
-    private fun handleSnapRequest() {
+    private fun handleSnapRequest(telegramId: String) {
         if (cameraManager?.isBusy() == true) {
             Log.w(TAG, "Camera is busy, ignoring snap request")
             return
@@ -116,7 +116,7 @@ class CameraMonitorService : Service() {
                 Log.i(TAG, "Photo captured successfully, sending callback")
                 updateNotification("Sending photo...")
 
-                callbackHandler?.sendCallback(photoFile, null) { success, message ->
+                callbackHandler?.sendCallback(photoFile, null, telegramId) { success, message ->
                     lastCallbackResult = if (success) "Success" else "Failed: $message"
                     updateNotification("Ready - Last: $timestamp")
                     releaseWakeLock()
@@ -127,7 +127,7 @@ class CameraMonitorService : Service() {
                 updateNotification("Capture failed")
 
                 // Send error callback
-                callbackHandler?.sendCallback(null, errorMessage) { success, message ->
+                callbackHandler?.sendCallback(null, errorMessage, telegramId) { success, message ->
                     lastCallbackResult = if (success) "Error reported" else "Failed: $message"
                     updateNotification("Ready - Last failed")
                     releaseWakeLock()
